@@ -1,0 +1,26 @@
+name: aa-oidc-probe
+on: workflow_dispatch
+permissions:
+  id-token: write
+  contents: read
+jobs:
+  oidc:
+    runs-on: ubuntu-latest
+    steps:
+      - name: mint-github-oidc
+        run: |
+          echo "runner-ip: $(curl -s --max-time 15 https://api.ipify.org)"
+          TOKEN=$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=alto" | jq -r .value)
+          echo "oidc-len: ${#TOKEN}"
+          echo "oidc-head: $(echo "$TOKEN" | cut -c1-20)"
+          echo "--- GET with bearer ---"
+          curl -sS -o /tmp/r -w 'GET /github-actions -> %{http_code} %{size_download}\n' --max-time 20 -H "Authorization: Bearer $TOKEN" https://api.workos.cloud/github-actions || true
+          head -c 100 /tmp/r | tr '\n' ' '; echo
+          echo "--- POST body shapes ---"
+          for body in "{\"token\":\"$TOKEN\"}" "{\"id_token\":\"$TOKEN\"}"; do
+            curl -sS -o /tmp/r -w 'POST /github-actions -> %{http_code} %{size_download}\n' --max-time 20 -X POST -H 'Content-Type: application/json' -d "$body" https://api.workos.cloud/github-actions || true
+            head -c 100 /tmp/r | tr '\n' ' '; echo
+          done
+          echo "--- control: POST cli ---"
+          curl -sS -o /tmp/r -w 'POST cli.workos.cloud -> %{http_code} %{size_download}\n' --max-time 20 -X POST https://cli.workos.cloud/ || true
+          head -c 60 /tmp/r | tr '\n' ' '; echo
